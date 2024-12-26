@@ -1,0 +1,28 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/apispecs
+    username: postgres
+    password: 1234
+  jpa:
+    show-sql: true
+    hibernate:
+      generate-ddl: true
+      ddl-auto: create
+server:
+  ssl:
+    enabled: false
+  servlet:
+    context-path: /api-specs
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+  thymeleaf:
+    prefix: classpath:templates/
+    suffix: .html
+    cache: false
