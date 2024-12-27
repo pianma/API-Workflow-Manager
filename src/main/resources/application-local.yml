@@ -17,6 +17,7 @@ server:
     enabled: false
   servlet:
     context-path: /api-specs
+  port: 8081
 springdoc:
   api-docs:
     path: /v3/api-docs
