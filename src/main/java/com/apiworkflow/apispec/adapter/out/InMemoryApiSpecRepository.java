@@ -2,12 +2,14 @@ package com.apiworkflow.apispec.adapter.out;
 
 import com.apiworkflow.apispec.application.port.out.ApiSpecRepository;
 import com.apiworkflow.apispec.domain.ApiSpec;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+@Slf4j
 @Repository
 public class InMemoryApiSpecRepository implements ApiSpecRepository {
 
@@ -15,7 +17,8 @@ public class InMemoryApiSpecRepository implements ApiSpecRepository {
 
     @Override
     public void save(ApiSpec apiSpec) {
-        store.put(apiSpec.getName() + ":" + apiSpec.getVersion(), apiSpec);
+//        log.info("Saving dependency data for API: {}", apiSpec.getPaths());
+//        store.put(apiSpec.getName() + ":" + apiSpec.getVersion(), apiSpec);
     }
 
     @Override

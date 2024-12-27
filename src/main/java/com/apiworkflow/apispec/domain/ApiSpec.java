@@ -1,15 +1,15 @@
 package com.apiworkflow.apispec.domain;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-
+import lombok.Data;
+import java.util.List;
 import java.util.Map;
 
-@AllArgsConstructor
-@Getter
+@Data
 public class ApiSpec {
-    private String domain;
-    private String name;
-    private String version;
-    private Map<String, String> paths; // 경로와 HTTP 메서드 매핑
+    private Map<String, ApiPath> paths; // API 경로 정보와 의존성 매핑
+
+    @Data
+    public static class ApiPath {
+        private List<String> dependencies; // 의존하는 다른 API 경로
+    }
 }

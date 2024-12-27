@@ -7,9 +7,11 @@ import com.apiworkflow.apispec.domain.DependencyGraph;
 import com.apiworkflow.common.UseCase;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 @RequiredArgsConstructor
 @UseCase
+@Service
 @Transactional
 public class DependencyAnalysisService implements AnalyzeDependencyUseCase {
 
@@ -19,10 +21,16 @@ public class DependencyAnalysisService implements AnalyzeDependencyUseCase {
     public void analyzeDependencies(ApiSpec apiSpec) {
         DependencyGraph graph = new DependencyGraph();
 
-        // 간단한 의존성 추가 예제
-        apiSpec.getPaths().forEach((path, method) -> {
-            graph.addDependency(apiSpec.getName(), path); // 의존성 추가
-        });
+//        apiSpec.getPaths().forEach((path, apiPath) -> {
+//            apiPath.getMethods().forEach((method, apiMethod) -> {
+//                System.out.println("Analyzing dependencies for " + method + " " + path);
+//                if (apiMethod.getDependencies() != null) {
+//                    apiMethod.getDependencies().forEach(dependency -> {
+//                        System.out.println("Dependency: " + dependency);
+//                    });
+//                }
+//            });
+//        });
 
         apiSpecRepository.save(apiSpec); // 스펙 저장
     }
