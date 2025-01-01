@@ -1,33 +1,24 @@
 package com.apiworkflow.apispec.adapter.in;
 
-import com.apiworkflow.apispec.application.port.in.AnalyzeDependencyUseCase;
-import com.apiworkflow.apispec.domain.ApiSpec;
-import com.apiworkflow.common.WebAdapter;
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.PathItem;
+import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.parser.OpenAPIV3Parser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import io.swagger.v3.oas.models.media.Schema;
-
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
-import io.swagger.v3.oas.models.PathItem;
-import io.swagger.v3.oas.models.Operation;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
-@WebAdapter
 @RestController
 @RequiredArgsConstructor
 public class ApiSpecController {
 
-    private final AnalyzeDependencyUseCase analyzeDependencyUseCase;
-
-    @PostMapping("/receive-openapi")
-    public ResponseEntity<Map<String, String>> receiveOpenApi(@RequestBody String openApiSpec) {
-        Map<String, String> apiDependencies = new HashMap<>();
+    @PostMapping("/dynamic-analyze-dependencies")
+    public ResponseEntity<Map<String, Set<String>>> analyzeDependencies(@RequestBody String openApiSpec) {
+        Map<String, Set<String>> apiDependencies = new HashMap<>();
         try {
             // OpenAPI 명세 파싱
             OpenAPIV3Parser parser = new OpenAPIV3Parser();
@@ -37,71 +28,60 @@ public class ApiSpecController {
                 throw new IllegalArgumentException("Invalid OpenAPI specification provided.");
             }
 
-            // 스키마 분석 및 의존성 탐지
-            analyzeDependencies(openAPI, apiDependencies);
+            // Paths 및 Components 분석
+            Map<String, PathItem> paths = openAPI.getPaths();
+            Map<String, Schema> schemas = openAPI.getComponents().getSchemas();
 
-            apiDependencies.forEach((api, dependency) -> {
-                System.out.printf("API '%s' 의 요청 데이터가 '%s'%n", api, dependency);
-            });
+            // 모든 경로 및 요청/응답 스키마를 순회하며 분석
+            for (String path : paths.keySet()) {
+                PathItem pathItem = paths.get(path);
+
+                pathItem.readOperations().forEach(operation -> {
+                    // 요청 스키마 분석
+                    if (operation.getRequestBody() != null) {
+                        operation.getRequestBody().getContent().forEach((mediaType, media) -> {
+                            if (media.getSchema() != null && media.getSchema().get$ref() != null) {
+                                String schemaName = extractSchemaName(media.getSchema().get$ref());
+                                extractDependencies(schemaName, schemas, path, apiDependencies);
+                            }
+                        });
+                    }
+
+                    // 응답 스키마 분석
+                    if (operation.getResponses() != null) {
+                        operation.getResponses().forEach((statusCode, apiResponse) -> {
+                            if (apiResponse.getContent() != null) {
+                                apiResponse.getContent().forEach((mediaType, media) -> {
+                                    if (media.getSchema() != null && media.getSchema().get$ref() != null) {
+                                        String schemaName = extractSchemaName(media.getSchema().get$ref());
+                                        extractDependencies(schemaName, schemas, path, apiDependencies);
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            }
 
             return ResponseEntity.ok(apiDependencies);
         } catch (Exception e) {
-            System.err.println("OpenAPI 명세 파싱 실패: " + e.getMessage());
+            System.err.println("Error analyzing dependencies: " + e.getMessage());
             return ResponseEntity.badRequest().build();
         }
     }
 
-    private void analyzeDependencies(OpenAPI openAPI, Map<String, String> apiDependencies) {
-        // 스키마 분석 및 의존성 탐지 로직
-        Map<String, Schema> schemas = openAPI.getComponents().getSchemas();
-        Map<String, PathItem> paths = openAPI.getPaths();
-
-        for (String path : paths.keySet()) {
-            PathItem pathItem = paths.get(path);
-
-            for (PathItem.HttpMethod method : pathItem.readOperationsMap().keySet()) {
-                Operation operation = pathItem.readOperationsMap().get(method);
-
-                if (operation.getRequestBody() != null) {
-                    operation.getRequestBody().getContent().forEach((mediaType, media) -> {
-                        if (media.getSchema() != null && media.getSchema().get$ref() != null) {
-                            String requestSchema = extractSchemaName(media.getSchema().get$ref());
-                            schemas.forEach((schemaName, schema) -> {
-                                if (requestSchema.equals(schemaName)) {
-                                    if (schema.getProperties() != null && schema.getProperties().containsKey("userId")) {
-                                        apiDependencies.put(path, "/users API: 'userId' 필드가 /users API의 응답 데이터 User 스키마에서 유래했습니다.");
-                                    }
-                                    if (schema.getProperties() != null && schema.getProperties().containsKey("productId")) {
-                                        apiDependencies.put(path, "/products API: 'productId' 필드가 /products API의 응답 데이터 Product 스키마에서 유래했습니다.");
-                                    }
-                                }
-                            });
-                        }
-                    });
+    private void extractDependencies(String schemaName, Map<String, Schema> schemas, String path, Map<String, Set<String>> apiDependencies) {
+        Schema schema = schemas.get(schemaName);
+        if (schema != null && schema.getProperties() != null) {
+            schema.getProperties().forEach((propertyName, propertySchema) -> {
+                if (propertySchema instanceof Schema) {
+                    Schema<?> property = (Schema<?>) propertySchema;
+                    if (property.get$ref() != null) {
+                        String referencedSchema = extractSchemaName(property.get$ref());
+                        apiDependencies.computeIfAbsent(path, k -> new HashSet<>()).add("/" + referencedSchema.toLowerCase());
+                    }
                 }
-
-                if (operation.getResponses() != null) {
-                    operation.getResponses().forEach((statusCode, apiResponse) -> {
-                        if (apiResponse.getContent() != null) {
-                            apiResponse.getContent().forEach((mediaType, media) -> {
-                                if (media.getSchema() != null && media.getSchema().get$ref() != null) {
-                                    String responseSchema = extractSchemaName(media.getSchema().get$ref());
-                                    schemas.forEach((schemaName, schema) -> {
-                                        if (responseSchema.equals(schemaName)) {
-                                            if (schema.getProperties() != null && schema.getProperties().containsKey("userId")) {
-                                                apiDependencies.put(path, "/users/{id} API: 'userId' 필드가 /users/{id} API의 응답 데이터 User 스키마에서 유래했습니다.");
-                                            }
-                                            if (schema.getProperties() != null && schema.getProperties().containsKey("productId")) {
-                                                apiDependencies.put(path, "/products API: 'productId' 필드가 /products API의 응답 데이터 Product 스키마에서 유래했습니다.");
-                                            }
-                                        }
-                                    });
-                                }
-                            });
-                        }
-                    });
-                }
-            }
+            });
         }
     }
 
