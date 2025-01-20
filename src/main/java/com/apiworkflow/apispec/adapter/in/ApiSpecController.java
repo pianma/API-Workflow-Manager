@@ -25,12 +25,22 @@ public class ApiSpecController {
             OpenAPI openAPI = parser.readContents(openApiSpec, null, null).getOpenAPI();
 
             if (openAPI == null) {
-                throw new IllegalArgumentException("Invalid OpenAPI specification provided.");
+                System.err.println("OpenAPI 파싱 실패");
+                throw new IllegalArgumentException("유효하지 않은 OpenAPI 명세.");
             }
+
+            System.out.println("파싱된 OpenAPI: " + openAPI);
 
             // Paths 및 Components 분석
             Map<String, PathItem> paths = openAPI.getPaths();
             Map<String, Schema> schemas = openAPI.getComponents().getSchemas();
+
+            System.out.println("경로 정보: " + paths);
+            System.out.println("스키마 정보: " + schemas);
+
+            if (paths == null || schemas == null) {
+                throw new IllegalArgumentException("경로나 스키마가 없음.");
+            }
 
             // 모든 경로 및 요청/응답 스키마를 순회하며 분석
             for (String path : paths.keySet()) {
@@ -42,6 +52,7 @@ public class ApiSpecController {
                         operation.getRequestBody().getContent().forEach((mediaType, media) -> {
                             if (media.getSchema() != null && media.getSchema().get$ref() != null) {
                                 String schemaName = extractSchemaName(media.getSchema().get$ref());
+                                System.out.println("요청 스키마 참조: " + schemaName);
                                 extractDependencies(schemaName, schemas, path, apiDependencies);
                             }
                         });
@@ -54,6 +65,7 @@ public class ApiSpecController {
                                 apiResponse.getContent().forEach((mediaType, media) -> {
                                     if (media.getSchema() != null && media.getSchema().get$ref() != null) {
                                         String schemaName = extractSchemaName(media.getSchema().get$ref());
+                                        System.out.println("응답 스키마 참조: " + schemaName);
                                         extractDependencies(schemaName, schemas, path, apiDependencies);
                                     }
                                 });
@@ -63,10 +75,11 @@ public class ApiSpecController {
                 });
             }
 
+            System.out.println("API 의존성: " + apiDependencies);
             return ResponseEntity.ok(apiDependencies);
         } catch (Exception e) {
-            System.err.println("Error analyzing dependencies: " + e.getMessage());
-            return ResponseEntity.badRequest().build();
+            System.err.println("의존성 분석 중 오류 발생: " + e.getMessage());
+            return ResponseEntity.badRequest().body(Collections.singletonMap("오류", Collections.singleton(e.getMessage())));
         }
     }
 
@@ -87,7 +100,7 @@ public class ApiSpecController {
 
     private static String extractSchemaName(String ref) {
         if (ref == null || !ref.contains("/")) {
-            throw new IllegalArgumentException("Invalid schema reference: " + ref);
+            throw new IllegalArgumentException("유효하지 않은 스키마 참조: " + ref);
         }
         return ref.substring(ref.lastIndexOf("/") + 1);
     }
